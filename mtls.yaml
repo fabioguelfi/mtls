@@ -1,0 +1,262 @@
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  labels:
+    cattle.io/creator: norman
+  name: mtls-config
+  namespace: default
+data:
+  PORT: "3000"
+  NODE_ENV: dev
+
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  labels:
+    cattle.io/creator: norman
+  name: mtls-files-nginx-config
+  namespace: default
+data:
+  default.conf: |
+        upstream node_basic {
+            server                  localhost:3000;
+        }
+
+        map $http_upgrade $connection_upgrade {
+          default upgrade;
+          '' close;
+        }
+
+        server {
+            listen                  80;
+
+            location / {
+                return              301 https://$host$request_uri;
+            }
+        }
+
+        server {
+            listen                  443 ssl;
+
+            ssl_certificate         /etc/ssl/server.crt;
+            ssl_certificate_key     /etc/ssl/server.key;
+            ssl_protocols           TLSv1.2 TLSv1.3;
+            ssl_ciphers             ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:TLS_DHE_RSA_WITH_AES_256_GCM_SHA384;
+
+            ssl_client_certificate  /etc/nginx/client_certs/ca.crt;
+            ssl_verify_client       optional;
+            ssl_verify_depth        2;
+
+            location / {
+                if ($ssl_client_verify != SUCCESS) { return 403; }
+
+                # proxy_set_header     Host $host;
+                # proxy_set_header     X-Real-IP $remote_addr;
+                proxy_set_header     SSL_Client_Issuer $ssl_client_i_dn;
+                proxy_set_header     SSL_Client $ssl_client_s_dn;
+                proxy_set_header     SSL_Client_Verify $ssl_client_verify;
+                proxy_pass_request_headers      on;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection $connection_upgrade;
+                proxy_pass           https://node_basic;
+            }
+        }
+
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  labels:
+    cattle.io/creator: norman
+  name: mtls-files-node-config
+  namespace: default
+data:
+  ca.crt: |
+      -----BEGIN CERTIFICATE-----
+      MIIE4DCCAsgCCQDrcj33zqwGrTANBgkqhkiG9w0BAQsFADAyMQ4wDAYDVQQDDAVt
+      eV9jYTEgMB4GA1UECgwXQ2xpZW50IENlcnRpZmljYXRlIERlbW8wHhcNMjEwODI1
+      MTIwMzQxWhcNMjIwODI1MTIwMzQxWjAyMQ4wDAYDVQQDDAVteV9jYTEgMB4GA1UE
+      CgwXQ2xpZW50IENlcnRpZmljYXRlIERlbW8wggIiMA0GCSqGSIb3DQEBAQUAA4IC
+      DwAwggIKAoICAQDHR/zHBLLOzni4qzCCvavCy4olZbjyDp6PVPbukQW+O/esMGTy
+      y+DwJN5XZVSB/AEAL0cLWY/enBKBORMf1KARq1sSjO1DSd1oYsnn98PxHsiZa5xA
+      +SfShJBHx2rJVhF0JOkJUYS1CESozD/Ll6FWtjaeX/eaFDYaB36vn1t6FA4EQZ8+
+      /OFMxluFjMPuXKR86OORJXGnkYHeOV+V9QudK+HlFtminmyJwa6+poBCVwZxauYH
+      xZTTtIByO78OOfGt7LUJAH7ZHJJtE/j+F+z+VF+fbq7VvUqiOb/eKVjwIQeEI77j
+      GABPC1pndwjeZJQp0Mus2SJcxQ8ptKnrBVB8xRE8/h5sNSxlZxh2KtDDrrSQkp/7
+      +dKoF5q6099d2Pwz0dcThgHlharg9Y9R9Av8HX2hTuKRslxRXKvBxZJOvyv52BBL
+      yg1sIUuprokcVtup1XdVevaikoRQgG/24aWLkyEJjxyPeAYS/sfB0ZrU0pspB/lk
+      ZFOLfRyFTwPBRaeWTyc9cZ11U55hM/1ZE9iiyoDZHewyNEE296YEtWGfNm3dpNaR
+      i+GVjBWSWTvB5FeUbo4czeEsC4KZyvxlcW9ObMYznkgA4w0K1aXFVh3SlA0moWur
+      kPcy7Z6EeHXMUDGpskmZMn2XqFZ/S7nI0ybwOsZovKpC+7Pv5GNBXUBHUQIDAQAB
+      MA0GCSqGSIb3DQEBCwUAA4ICAQCXxj9UV8T3R3/y0bgXn16mxpRoGi5KIHTHL+fq
+      5nGrDpiMKQu7EIDXpadc9ZehHDhjWSCcZL4xHxlnmHuguTE4BRfMOhIF60zKeceQ
+      A4wYGqms3CQ4HzPkZdTwrI3I8iCnYEDYUydHtUAquztRap0MHpirVbd1V5/obHSK
+      mih3eE9FNFygN8/BPDmGO5fG+giShnsGLKtCAnCtxD9qJJ+7F3GtZX5gI9oRmWwU
+      wSt1TVyMcXO9DjomeJg9HVCiSX0F9oW6lUHO0ec0EKYNjwxcGCg3EBNllBzT0YmT
+      Hn6kLCES8o6HFi5SmeF/btbGMDGXILSQFVpiwfxKra538QlOXSarmpuaowPa5vmm
+      5XbuyCJanjsSuwyh5sjmK88+ZCdBPnMRkwKRvbPP0uvtTAWr4Pm4UxTlbqT7QTwB
+      +x4S2traMFBJzEm6jt51J4Wc0GrZ29/3BNpPzNNgupr++7zal3T5XhIxn5CwyJ8H
+      Y/riD+SaKVnacBm2UcXQujx4coPYayrXqAuG26vfov1djsJjZ3fyGt+7VUNi3b0I
+      kaPmyAI5ctDvXJ/jObvmwJoIerrq88DE4cOd1iOuDRaYMA4Cqx17lGlQMwZDP3z1
+      OpMCK+ogWYPWLjex5AgHeNX9fjPljOPPUEvHA61r2qqibB7l7YaoweUTUTgDkSrn
+      s9w8GA==
+      -----END CERTIFICATE-----
+  server.crt: |
+      -----BEGIN CERTIFICATE-----
+      MIIEzzCCArcCCQCa3fyDhn8GnDANBgkqhkiG9w0BAQUFADAyMQ4wDAYDVQQDDAVt
+      eV9jYTEgMB4GA1UECgwXQ2xpZW50IENlcnRpZmljYXRlIERlbW8wHhcNMjEwODI1
+      MTIwMzQzWhcNMjIwODI1MTIwMzQzWjAhMR8wHQYDVQQDDBZtdGxzLmRldi5saW5h
+      b2IuY29tLmJyMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAzlwFTfun
+      zz4kmOneegSGNreSxN7JMaA1kDNFBfYcM26V5SNogbsmU6TxA2fPqlbMYrvTt4su
+      ivOmD7TwyTo47hDiGnEXlTg61ETzcFpv2ZSoenbhLbeXE5YKnQrYiVHo4CTr0SVx
+      n4mnksaQGYEKIeCPLZYuUgEdkthUN6ZSZGjGgf6hmliSK9SMXZxX6KXOm8ITmylD
+      vklmyb38O6P8JzwCUtrSdYkkGtP3Uper6fgfSddMyrv1iVTuZR7/6iiJPYyqnkIS
+      /9wdj9h6QDhCnv+yqgjCHMGOK5XZyfYVOWXZwUj4aRXAXqGur7uf8wS5zEFZegII
+      Q8rtKRvlp/73KZkrUydtoDgGJQ9L21YAGs5jPuuMO5aiXpvr2fxGuPypKy/9Ma62
+      CUTXB3LlxJndXRZTpdDwejTqR3CATwSsSAQ6Kne7GoIVfs2FoAHstN5dP4jjiqkT
+      kqUantXK0P0NBexSWbQzEJ1H270GPQgZ+wFOjXWbU22cfVBHXrS0K0oj3oEORvsQ
+      yNFkBAskVTuI+TseR/MsIrW0tkCFJLaEe7BCYzvr5dBCkSWKII5MYCL6GMqvzdQD
+      DLmHaDWym+eFU7Y8OPm93m3TFhe0C+fyt0yoemCVSgn3JGXJaUUnh3LLyTSw08W/
+      Y7vDsR7aU9MJ9oOwI/uldJFU6hHWLmBaEcMCAwEAATANBgkqhkiG9w0BAQUFAAOC
+      AgEAQwVUTizL59VzDQMUXuCMuRm6XTNOAELWrgNBIkiTg9zD6oPqyDYIvZUFLtUX
+      JFAllJe/nYdhWScqSDUEVtolQ7OXVjZ3qFy8vHGdCZtOPgXxt+hcW1whFu++ZU3C
+      jJmEESBZFzzc3I90wr0q1P5TXH9C/Kfl5KTOrdfL5IQ3bFS5Vh8Phae4mIX5l5Lb
+      kUSL3YVRLdH8ryMLTG5+1B3Lhhm7t4k4YmhgfjrOH/rUIOkO7dRfmgcHCN6vHCAl
+      6L/OdLKYc4Fl0l8PUfmpTKJtfLtmFjvt/X9U5cYBxtlQaTYBOul9VNUBLfrDEBUj
+      aVdy+8AB33xDelIN60A5L7ZcteKt/MWEpohAwBhpnZvP2240d6uQlrVGUtoTaeoy
+      PCP661HXxSZOoi8JZI34MkhlvFA+C/sMt3jTAlQJ3HRJkml3ambTw3da835qPTmu
+      cqVfugUJ2BeAPVG9zvxsHr8iMPD+rNhUDPxeYpVTn0N+zuTli6SZKvkemmvRYx/F
+      30Ay/uj0WRNq44PJrpv1LkmnUHYENdkCShxF9V69IYa4NjoicUza0+VNnCxfXdPX
+      zoQ5a4MKcVv879K6FRO8nyiKWC4qfYn4Dr7GU385OYjZofDp6uWhvOridY3JsrQn
+      0Bu89mA9ZjWV7Vf2em88fKSx+dcj9VQ11mWZ/4C6ePtg9qE=
+      -----END CERTIFICATE-----
+  server.key: |
+      -----BEGIN PRIVATE KEY-----
+      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
+      u3qWv1WmJKlDwOwlhYlNkqrq7BlajME=
+      -----END PRIVATE KEY-----
+
+
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: mtls
+  # namespace: whoami5
+  labels:
+    allow.http: "false"
+    application: mtls
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      application: mtls
+  template:
+    metadata:
+      labels:
+        application: mtls
+    spec:
+      volumes:
+      - name: mtls-files-node-volume
+        configMap:
+          name: mtls-files-node-config
+      - name: mtls-files-nginx-volume
+        configMap:
+          name: mtls-files-nginx-config
+      containers:
+      - name: mtls-node
+        image: public.ecr.aws/v6q6m7s0/mtls:1.0
+        volumeMounts:
+        - name: mtls-files-node-volume
+          mountPath: /app/certs/
+        envFrom:
+        - configMapRef:
+            name: mtls-config
+        ports:
+        - containerPort: 3000
+        securityContext:
+          privileged: true
+
+      - name: mtls-nginx
+        image: nginx
+        volumeMounts:
+        - name: mtls-files-node-volume
+          mountPath: /etc/ssl/
+        - name: mtls-files-node-volume
+          mountPath: /etc/nginx/client_certs/ca.crt
+          subPath: ca.crt
+        - name: mtls-files-nginx-volume
+          mountPath: /etc/nginx/conf.d/
+        ports:
+        - containerPort: 443
+        securityContext:
+          privileged: true
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mtls
+  # namespace: whoami5
+spec:
+  type: NodePort
+  ports:
+  - name: mtls-nodeport
+    nodePort: 30700
+    port: 30700
+    protocol: TCP
+    targetPort: 443
+  selector:
+    application: mtls
+  sessionAffinity: None
